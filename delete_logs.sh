@@ -34,7 +34,7 @@ delete_logs() {
     echo "$TIMESTAMP  No log directories found older than : $LOG_DAYS day/s." >> "$LOG_FILE"
   else
     for LFILE in $LOG_FILES; do
-      #/bin/rm -rf "$LFILE"
+      /bin/rm -rf "$LFILE"
       echo -e "$TIMESTAMP  Deleting log dir : $LFILE" >> "$LOG_FILE"
     done
     echo -e "$TIMESTAMP  Log deletion finished." >> "$LOG_FILE"

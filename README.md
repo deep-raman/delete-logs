@@ -5,9 +5,9 @@ This scripts find the pattern in the path and deletes the files/folders found ol
 These variables can be personalized with the desired ones :
 
 
-LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
-LOG_DAYS="4"
-LOG_FILES=$(/bin/find "$LOG_DIR" -name "????-??-??" -mtime +$LOG_DAYS)
+  LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
+  LOG_DAYS="4"
+  LOG_FILES=$(/bin/find "$LOG_DIR" -name "????-??-??" -mtime +$LOG_DAYS)
 
 The script can be used to run periodically using cronjob.
 

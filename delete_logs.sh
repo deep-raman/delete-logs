@@ -19,7 +19,7 @@ TIMESTAMP=$(/bin/date "+%Y-%m-%d %H:%M:%S")
 
 # Log config
 LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
-LOG_FILE="/var/log/"$DATE"_delete_logs.log"
+LOG_FILE="/var/log/${DATE}_delete_logs.log"
 LOG_DAYS="4"
 
 delete_logs() {

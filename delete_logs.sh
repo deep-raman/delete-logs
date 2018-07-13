@@ -13,8 +13,11 @@
 
 # Date and hostname variables
 DATE=$(/bin/date "+%Y%m%d")
+YEAR=$(/bin/date "+%Y")
+MONTH=$(/bin/date "+%m")
+DAY=$(/bin/date "+%d")
 TIMESTAMP=$(/bin/date "+%Y-%m-%d %H:%M:%S")
-#HOSTNAME=$(/bin/hostname)
+HOSTNAME=$(/bin/hostname)
 #HOSTNAME=$(echo $HOSTNAME | /bin/cut -d'.' -f1)
 
 # Log delete config
@@ -22,8 +25,14 @@ LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
 LOG_FILE="/var/log/${DATE}_delete_logs.log"
 LOG_DAYS="4"
 
-# Log compression config
-COMPRESS_DAY="0"
+# Log compression config, days to compress old files. Set to 0, to get yesterday's log
+COMPRESS_DAY="4"
+
+# AWS Configuration
+AWS_BUCKET_NAME="sky-tours-backups"
+AWS_BUCKET_REGION="eu-west-1"
+AWS_BUCKET_PATH="s3://$AWS_BUCKET_NAME/$YEAR/$HOSTNAME"
+AWS_BUCKET_DIR="debug_logs"
 
 check_log_dir() {
   if [[ ! -d "$LOG_DIR" ]]; then
@@ -33,6 +42,15 @@ check_log_dir() {
 }
 
 delete_logs() {
+  if [[ ! -z "$1" ]]; then
+    /bin/rm -rf "$1"
+  else
+    echo -e "ERROR: No directory provided for deletion."
+    exit 1
+  fi
+}
+
+get_dir_to_delete() {
   echo -e "" >> "$LOG_FILE"
   echo -e "$TIMESTAMP Checking debug log directories to delete older than $LOG_DAYS days..." >> "$LOG_FILE" 
   LOG_FILES=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime +$LOG_DAYS)
@@ -41,19 +59,39 @@ delete_logs() {
   else
     for LFILE in $LOG_FILES; do
       echo -e "$TIMESTAMP  Deleting log dir : $LFILE" >> "$LOG_FILE"
-      /bin/rm -rf "$LFILE"
+      delete_logs "$LFILE"
     done
     echo -e "$TIMESTAMP  Log deletion finished." >> "$LOG_FILE"
   fi
 }
 
+upload_to_s3() {
+  echo "in upload"
+  if [[ ! -z "${COMPRESSED_DIRS[@]}" ]]; then
+    for COMP_DIR in "${COMPRESSED_DIRS[*]}"; do
+      echo "$COMP_DIR"
+      MONTH=$(echo "$COMP_DIR" | cut -d"-" -f2)
+      DAY=$(echo "$COMP_DIR" | cut -d"-" -f3 | cut -d"." -f1)
+      UPLOAD=$(/usr/local/bin/aws s3 mv "$COMP_DIR" "$AWS_BUCKET_PATH"/"$MONTH"/"$DAY"/"$AWS_BUCKET_DIR"/"$YEAR"-"$MONTH"-"$DAY".tar.gz \
+      --storage-class REDUCED_REDUNDANCY \
+      --region "$AWS_BUCKET_REGION")
+      echo "$UPLOAD"
+    done
+  else
+    echo -e "ERROR: No compressed dir provided for upload to S3."
+    exit 1
+  fi
+}
+
 compress_dir() {
+  COMPRESSED_DIRS=()
   if [[ ! -z "$1" ]]; then
     DIR_NAME="$1"
     COMPRESS_DIR_NAME="${DIR_NAME}.tar.gz"
     echo -e "Compressing log directory : $DIR_NAME"
     /bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
     echo -e "OK : Directory compression success : $DIR_NAME"
+    COMPRESSED_DIRS+=("$COMPRESS_DIR_NAME")
   else
     echo -e "ERROR : No directory provided for compression."
     exit 1
@@ -61,7 +99,7 @@ compress_dir() {
 }
 
 get_dirs_to_compress() {
-  DIRS_TO_COMPRESS=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime $COMPRESS_DAY)
+  DIRS_TO_COMPRESS=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime +$LOG_DAYS)
   echo "$DIRS_TO_COMPRESS"
   if [[ -z "$DIRS_TO_COMPRESS" ]]; then
     MSG="$TIMESTAMP  ERROR: No log directory found to compress."
@@ -75,10 +113,9 @@ get_dirs_to_compress() {
   fi
 }
 
-
 check_log_dir
-#delete_logs
+#get_dir_to_delete
 get_dirs_to_compress
+upload_to_s3
 
 exit 0
-

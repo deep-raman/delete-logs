@@ -14,8 +14,8 @@
 # Date and hostname variables
 DATE=$(/bin/date "+%Y%m%d")
 YEAR=$(/bin/date "+%Y")
-MONTH=$(/bin/date "+%m")
-DAY=$(/bin/date "+%d")
+CURRENT_MONTH=$(/bin/date "+%m")
+CURRENT_DAY=$(/bin/date "+%d")
 TIMESTAMP=$(/bin/date "+%Y-%m-%d %H:%M:%S")
 HOSTNAME=$(/bin/hostname)
 #HOSTNAME=$(echo $HOSTNAME | /bin/cut -d'.' -f1)
@@ -23,17 +23,17 @@ HOSTNAME=$(/bin/hostname)
 # Log delete config
 LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
 LOG_FILE="/var/log/${DATE}_delete_logs.log"
-LOG_DAYS="4"
+LOG_DAYS="3"
 
 # Log compression config, days to compress old files. Set to 0, to get yesterday's log
-COMPRESS_DAY="4"
+COMPRESS_DAY="0"
 
 # AWS Configuration
 AWS_BUCKET_NAME="sky-tours-backups"
 AWS_BUCKET_REGION="eu-west-1"
 AWS_BUCKET_PATH="s3://$AWS_BUCKET_NAME/$YEAR/$HOSTNAME"
 AWS_BUCKET_DIR="debug_logs"
-AWS_FINAL_PATH="${AWS_FINAL_PATH}/${AWS_BUCKET_DIR}"
+AWS_FINAL_PATH="${AWS_BUCKET_PATH}/${AWS_BUCKET_DIR}"
 
 check_log_dir() {
   if [[ ! -d "$LOG_DIR" ]]; then
@@ -70,37 +70,38 @@ check_file_on_s3() {
   if [[ ! -z "$1" ]]; then
     FILE_TO_CHECK="$1"
     FILE_EXISTS_ON_S3=$(/usr/local/bin/aws s3 ls "$FILE_TO_CHECK")
+    echo "$FILE_EXISTS_ON_S3"
     if [[ -z "$FILE_EXISTS_ON_S3" ]]; then
-      echo -e "KO"
+      echo "KO"
     else
       echo "OK"
     fi
   else
-    echo -e "ERROR - No file provided to check on AWS S3."
+    echo -e "ERROR - No file provided to check on AWS S3." >> "$LOG_FILE"
     exit 1
   fi
 }
 
 upload_to_s3() {
-  echo "in upload"
   if [[ ! -z "${COMPRESSED_DIRS[@]}" ]]; then
     for COMP_DIR in "${COMPRESSED_DIRS[@]}"; do
-      echo "$COMP_DIR"
-      #MONTH=$(echo "$COMP_DIR" | cut -d"-" -f2)
-      #DAY=$(echo "$COMP_DIR" | cut -d"-" -f3 | cut -d"." -f1)
-      FILE_EXIST=$(check_file_on_s3 "$FILE_TO_UPLOAD")
+      MONTH=$(echo "$COMP_DIR" | cut -d"-" -f2)
+      DAY=$(echo "$COMP_DIR" | cut -d"-" -f3 | cut -d"." -f1)
+      FILE_TO_UPLOAD="${AWS_FINAL_PATH}/${YEAR}-${MONTH}-${DAY}.tar.gz"
+      echo "Checking if file is already present on S3." >> "$LOG_FILE"
+      FILE_EXIST="$(check_file_on_s3 "$FILE_TO_UPLOAD")"
       if [[ "$FILE_EXIST" == "KO" ]]; then
-        #UPLOAD=$(/usr/local/bin/aws s3 mv "$COMP_DIR" "$AWS_BUCKET_PATH"/"$MONTH"/"$DAY"/"$AWS_BUCKET_DIR"/"$YEAR"-"$MONTH"-"$DAY".tar.gz \
-        UPLOAD=$(/usr/local/bin/aws s3 mv "$COMP_DIR" "$AWS_FINAL_PATH" \
+        echo "Uploading file to S3 : $COMP_DIR ..."
+        UPLOAD=$(/usr/local/bin/aws s3 mv "$COMP_DIR" "$AWS_FINAL_PATH/" \
         --storage-class REDUCED_REDUNDANCY \
         --region "$AWS_BUCKET_REGION")
-        echo "OK: Upload completed."
+        echo "OK: File uploaded to S3 successfully." >> "$LOG_FILE"
       else
-        echo -e "File already exists on S3"
+        echo -e "$COMP_DIR : File already exists on S3" >> "$LOG_FILE"
       fi
     done
   else
-    echo -e "ERROR: No compressed dir provided for upload to S3."
+    echo -e "ERROR: No compressed dir provided for upload to S3." >> "$LOG_FILE"
     exit 1
   fi
 }
@@ -109,30 +110,27 @@ compress_dir() {
   COMPRESSED_DIRS=""
   if [[ ! -z "$1" ]]; then
     DIR_NAME="$1"
-    COMPRESS_DIR_NAME="${DIR_NAME}.tar.gz"
-    #if [[ -f "$COMPRESS_DIR_NAME" && ! -s "$COMPRESS_DIR_NAME" ]]; then
-    #  echo -e "Directory already compressed and size is not zero."
-    #  echo -e "Ignoring..."
-    #else
-    echo -e "Compressing log directory : $DIR_NAME"
-    #/bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
-    echo -e "OK : Directory compression success : $DIR_NAME"
-    COMPRESSED_DIRS+=("${COMPRESS_DIR_NAME}")
-    echo "${COMPRESSED_DIRS[@]}"
-    #fi
+    if [[ "$DIR_NAME" == *"$YEAR-$CURRENT_MONTH-$CURRENT_DAY"* ]]; then
+      echo "Ignoring today's logs directory : $DIR_NAME" >> "$LOG_FILE"
+    else
+      COMPRESS_DIR_NAME="${DIR_NAME}.tar.gz"
+      echo -e "Compressing log directory : $DIR_NAME" >> "$LOG_FILE"
+      #/bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
+      echo -e "OK : Directory compression success : $DIR_NAME" >> "$LOG_FILE"
+      COMPRESSED_DIRS+=("${COMPRESS_DIR_NAME}")
+    fi
   else
-    echo -e "ERROR : No directory provided for compression."
+    echo -e "ERROR : No directory provided for compression." >> "$LOG_FILE"
     exit 1
   fi
 }
 
 get_dirs_to_compress() {
-  DIRS_TO_COMPRESS=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime -$LOG_DAYS)
+  DIRS_TO_COMPRESS=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime $COMPRESS_DAY)
   echo "$DIRS_TO_COMPRESS"
   if [[ -z "$DIRS_TO_COMPRESS" ]]; then
     MSG="$TIMESTAMP  ERROR: No log directory found to compress."
     echo "$MSG" >> "$LOG_FILE"
-    echo "$MSG"
     exit 1
   else
     for CDIR in $DIRS_TO_COMPRESS; do
@@ -142,8 +140,8 @@ get_dirs_to_compress() {
 }
 
 check_log_dir
-#get_dir_to_delete
 get_dirs_to_compress
 upload_to_s3
+get_dir_to_delete
 
 exit 0

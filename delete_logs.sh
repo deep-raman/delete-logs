@@ -6,7 +6,7 @@
 #  Email         :  raman@sky-tours.com
 #  Date          :  12 June 2018
 #  Description   :  Script to delete debug logs on stat01 
-#  Version       :  1.0
+#  Version       :  2.0
 #
 ##########################################################################################################
 
@@ -90,8 +90,8 @@ upload_to_s3() {
       FILE_TO_UPLOAD="${AWS_FINAL_PATH}/${YEAR}-${MONTH}-${DAY}.tar.gz"
       echo "Checking if file is already present on S3." >> "$LOG_FILE"
       FILE_EXIST="$(check_file_on_s3 "$FILE_TO_UPLOAD")"
-      if [[ "$FILE_EXIST" == "KO" ]]; then
-        echo "Uploading file to S3 : $COMP_DIR ..."
+      if [[ "$FILE_EXIST" == *"KO"* ]]; then
+        echo "Uploading file to S3 : $COMP_DIR ..." >> "$LOG_FILE"
         UPLOAD=$(/usr/local/bin/aws s3 mv "$COMP_DIR" "$AWS_FINAL_PATH/" \
         --storage-class REDUCED_REDUNDANCY \
         --region "$AWS_BUCKET_REGION")
@@ -115,7 +115,7 @@ compress_dir() {
     else
       COMPRESS_DIR_NAME="${DIR_NAME}.tar.gz"
       echo -e "Compressing log directory : $DIR_NAME" >> "$LOG_FILE"
-      #/bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
+      /bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
       echo -e "OK : Directory compression success : $DIR_NAME" >> "$LOG_FILE"
       COMPRESSED_DIRS+=("${COMPRESS_DIR_NAME}")
     fi

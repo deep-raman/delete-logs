@@ -21,7 +21,7 @@ HOSTNAME=$(/bin/hostname)
 #HOSTNAME=$(echo $HOSTNAME | /bin/cut -d'.' -f1)
 
 # Log delete config
-LOG_DIR="/var/www/vhosts/LOGS/s/log/debug/"
+LOG_DIR="/var/www/vhosts/sky-tours.com/work/log/debug/"
 LOG_FILE="/var/log/${DATE}_delete_logs.log"
 LOG_DAYS="3"
 

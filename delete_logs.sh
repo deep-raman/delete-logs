@@ -115,7 +115,7 @@ compress_dir() {
     else
       COMPRESS_DIR_NAME="${DIR_NAME}.tar.gz"
       echo -e "Compressing log directory : $DIR_NAME" >> "$LOG_FILE"
-      /bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}"
+      /bin/tar -zcf "${COMPRESS_DIR_NAME}" "${DIR_NAME}" >> "$LOG_FILE" 2>&1
       echo -e "OK : Directory compression success : $DIR_NAME" >> "$LOG_FILE"
       COMPRESSED_DIRS+=("${COMPRESS_DIR_NAME}")
     fi

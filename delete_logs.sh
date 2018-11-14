@@ -18,12 +18,11 @@ CURRENT_MONTH=$(/bin/date "+%m")
 CURRENT_DAY=$(/bin/date "+%d")
 TIMESTAMP=$(/bin/date "+%Y-%m-%d %H:%M:%S")
 HOSTNAME=$(/bin/hostname)
-#HOSTNAME=$(echo $HOSTNAME | /bin/cut -d'.' -f1)
 
 # Log delete config
 LOG_DIR="/var/www/vhosts/sky-tours.com/work/log/debug/"
 LOG_FILE="/var/log/${DATE}_delete_logs.log"
-LOG_DAYS="3"
+LOG_DAYS="2"
 
 # Log compression config, days to compress old files. Set to 0, to get yesterday's log
 COMPRESS_DAY="0"
@@ -69,8 +68,7 @@ get_dir_to_delete() {
 check_file_on_s3() {
   if [[ ! -z "$1" ]]; then
     FILE_TO_CHECK="$1"
-    FILE_EXISTS_ON_S3=$(/usr/local/bin/aws s3 ls "$FILE_TO_CHECK")
-    echo "$FILE_EXISTS_ON_S3"
+    FILE_EXISTS_ON_S3=$(/usr/local/bin/aws s3 ls "$FILE_TO_CHECK" 2>&1 /dev/null)
     if [[ -z "$FILE_EXISTS_ON_S3" ]]; then
       echo "KO"
     else
@@ -83,10 +81,11 @@ check_file_on_s3() {
 }
 
 upload_to_s3() {
+  #COMPRESSED_DIRS="$(echo "${COMPRESSED_DIRS[@]}" | tr -d ' ')"
   if [[ ! -z "${COMPRESSED_DIRS[@]}" ]]; then
     for COMP_DIR in "${COMPRESSED_DIRS[@]}"; do
-      MONTH=$(echo "$COMP_DIR" | cut -d"-" -f2)
-      DAY=$(echo "$COMP_DIR" | cut -d"-" -f3 | cut -d"." -f1)
+      MONTH=$(echo "$COMP_DIR" | cut -d"-" -f3)
+      DAY=$(echo "$COMP_DIR" | cut -d"-" -f4 | cut -d"." -f1)
       FILE_TO_UPLOAD="${AWS_FINAL_PATH}/${YEAR}-${MONTH}-${DAY}.tar.gz"
       echo "Checking if file is already present on S3." >> "$LOG_FILE"
       FILE_EXIST="$(check_file_on_s3 "$FILE_TO_UPLOAD")"
@@ -127,7 +126,6 @@ compress_dir() {
 
 get_dirs_to_compress() {
   DIRS_TO_COMPRESS=$(/usr/bin/find "$LOG_DIR" -name "????-??-??" -mtime $COMPRESS_DAY)
-  echo "$DIRS_TO_COMPRESS"
   if [[ -z "$DIRS_TO_COMPRESS" ]]; then
     MSG="$TIMESTAMP  ERROR: No log directory found to compress."
     echo "$MSG" >> "$LOG_FILE"
